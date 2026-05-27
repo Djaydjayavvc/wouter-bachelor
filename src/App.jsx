@@ -4,6 +4,7 @@ import { CREW, DAYS } from './lib/seed'
 import Slot from './components/Slot'
 import GearItem from './components/GearItem'
 import AddSlotModal from './components/AddSlotModal'
+import Gallery from './components/Gallery'
 
 export default function App() {
   const [me, setMe] = useState(() => localStorage.getItem('me') || 'Yahya')
@@ -13,16 +14,20 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
   const [showAddSlot, setShowAddSlot] = useState(false)
+  const [showGallery, setShowGallery] = useState(false)
+  const [gallery, setGallery] = useState([])
 
   useEffect(() => { localStorage.setItem('me', me) }, [me])
 
   const loadAll = useCallback(async () => {
-    const [slotsRes, gearRes] = await Promise.all([
+    const [slotsRes, gearRes, galleryRes] = await Promise.all([
       supabase.from('slots').select('*').eq('party_id', PARTY_ID).order('day').order('position'),
       supabase.from('gear').select('*').eq('party_id', PARTY_ID).order('created_at'),
+      supabase.from('gallery').select('*').eq('party_id', PARTY_ID).order('created_at', { ascending: false }),
     ])
     if (slotsRes.data) setSlots(slotsRes.data)
     if (gearRes.data) setGear(gearRes.data)
+    if (galleryRes.data) setGallery(galleryRes.data)
     setLoading(false)
   }, [])
 
@@ -40,6 +45,11 @@ export default function App() {
         { event: '*', schema: 'public', table: 'gear', filter: `party_id=eq.${PARTY_ID}` },
         (payload) => {
           setGear(curr => applyChange(curr, payload, 'created_at'))
+        })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'gallery', filter: `party_id=eq.${PARTY_ID}` },
+        (payload) => {
+          setGallery(curr => applyChange(curr, payload, 'created_at'))
         })
       .subscribe((status) => {
         setConnected(status === 'SUBSCRIBED')
@@ -114,11 +124,16 @@ export default function App() {
             {connected ? 'live sync' : 'offline'}
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>jij bent</div>
-          <select className="me-select" value={me} onChange={e => setMe(e.target.value)}>
-            {CREW.map(name => <option key={name}>{name}</option>)}
-          </select>
+        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button className="gallery-btn" onClick={() => setShowGallery(true)}>
+            📷 Gallery
+          </button>
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>jij bent</div>
+            <select className="me-select" value={me} onChange={e => setMe(e.target.value)}>
+              {CREW.map(name => <option key={name}>{name}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -177,6 +192,15 @@ export default function App() {
         <AddSlotModal
           onClose={() => setShowAddSlot(false)}
           onSave={(data) => { addSlot(data); setShowAddSlot(false) }}
+        />
+      )}
+
+      {showGallery && (
+        <Gallery
+          onClose={() => setShowGallery(false)}
+          me={me}
+          gallery={gallery}
+          slots={slots}
         />
       )}
     </div>
