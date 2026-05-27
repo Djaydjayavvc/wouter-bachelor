@@ -48,7 +48,16 @@ export default function App() {
     return () => { supabase.removeChannel(channel) }
   }, [loadAll])
 
-  const daySlots = slots.filter(s => s.day === activeDay)
+  const daySlots = slots
+    .filter(s => s.day === activeDay)
+    .sort((a, b) => {
+      const ta = parseTimeMinutes(a.time)
+      const tb = parseTimeMinutes(b.time)
+      if (ta !== null && tb !== null) return ta - tb
+      if (ta !== null) return -1
+      if (tb !== null) return 1
+      return a.position - b.position
+    })
 
   const updateSlot = async (id, patch) => {
     setSlots(curr => curr.map(s => s.id === id ? { ...s, ...patch } : s))
@@ -172,6 +181,16 @@ export default function App() {
       )}
     </div>
   )
+}
+
+function parseTimeMinutes(time) {
+  if (!time) return null
+  const m = String(time).trim().match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return null
+  const h = parseInt(m[1], 10)
+  const min = parseInt(m[2], 10)
+  if (h > 23 || min > 59) return null
+  return h * 60 + min
 }
 
 function applyChange(curr, payload, ...sortKeys) {
