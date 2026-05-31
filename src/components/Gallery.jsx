@@ -2,7 +2,8 @@ import React, { useRef, useState } from 'react'
 import { supabase, PARTY_ID } from '../lib/supabase'
 
 export default function Gallery({ onClose, me, gallery, slots }) {
-  const fileInput = useRef()
+  const cameraInput = useRef()
+  const libraryInput = useRef()
   const [uploading, setUploading] = useState(false)
   const [fullscreen, setFullscreen] = useState(null)
 
@@ -93,21 +94,40 @@ export default function Gallery({ onClose, me, gallery, slots }) {
       )}
 
       <input
-        ref={fileInput}
+        ref={cameraInput}
         type="file"
         accept="image/*"
         capture="environment"
         style={{ display: 'none' }}
         onChange={handleUpload}
       />
-      <button
-        className="gallery-fab"
-        disabled={uploading}
-        onClick={() => fileInput.current.click()}
-        aria-label="Foto uploaden"
-      >
-        {uploading ? '…' : '+'}
-      </button>
+      <input
+        ref={libraryInput}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleUpload}
+      />
+      <div className="gallery-fab-group">
+        <button
+          className="gallery-fab"
+          disabled={uploading}
+          onClick={() => libraryInput.current.click()}
+          aria-label="Kies uit galerij"
+          title="Kies uit galerij"
+        >
+          {uploading ? '…' : '🖼'}
+        </button>
+        <button
+          className="gallery-fab"
+          disabled={uploading}
+          onClick={() => cameraInput.current.click()}
+          aria-label="Foto maken"
+          title="Foto maken"
+        >
+          {uploading ? '…' : '📷'}
+        </button>
+      </div>
 
       {fullscreen && (
         <div className="gallery-fullscreen" onClick={() => setFullscreen(null)}>
