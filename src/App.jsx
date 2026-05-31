@@ -1,33 +1,48 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase, PARTY_ID } from './lib/supabase'
-import { CREW, DAYS } from './lib/seed'
-import Slot from './components/Slot'
-import GearItem from './components/GearItem'
-import AddSlotModal from './components/AddSlotModal'
-import Gallery from './components/Gallery'
+import { CREW } from './lib/seed'
+import Planner from './components/Planner'
+import Missions from './components/Missions'
+import MemoryBook from './components/MemoryBook'
 
 export default function App() {
   const [me, setMe] = useState(() => localStorage.getItem('me') || 'Yahya')
-  const [activeDay, setActiveDay] = useState(1)
   const [slots, setSlots] = useState([])
   const [gear, setGear] = useState([])
+  const [gallery, setGallery] = useState([])
+  const [missions, setMissions] = useState([])
+  const [partyMeta, setPartyMeta] = useState({ memory_mode: false })
+  const [currentView, setCurrentView] = useState('planner')
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
-  const [showAddSlot, setShowAddSlot] = useState(false)
-  const [showGallery, setShowGallery] = useState(false)
-  const [gallery, setGallery] = useState([])
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsRef = useRef()
 
   useEffect(() => { localStorage.setItem('me', me) }, [me])
 
+  useEffect(() => {
+    const handler = (e) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target)) {
+        setSettingsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
   const loadAll = useCallback(async () => {
-    const [slotsRes, gearRes, galleryRes] = await Promise.all([
+    const [slotsRes, gearRes, galleryRes, missionsRes, metaRes] = await Promise.all([
       supabase.from('slots').select('*').eq('party_id', PARTY_ID).order('day').order('position'),
       supabase.from('gear').select('*').eq('party_id', PARTY_ID).order('created_at'),
       supabase.from('gallery').select('*').eq('party_id', PARTY_ID).order('created_at', { ascending: false }),
+      supabase.from('missions').select('*').eq('party_id', PARTY_ID).order('created_at'),
+      supabase.from('party_meta').select('*').eq('party_id', PARTY_ID).single(),
     ])
     if (slotsRes.data) setSlots(slotsRes.data)
     if (gearRes.data) setGear(gearRes.data)
     if (galleryRes.data) setGallery(galleryRes.data)
+    if (missionsRes.data) setMissions(missionsRes.data)
+    if (metaRes.data) setPartyMeta(metaRes.data)
     setLoading(false)
   }, [])
 
@@ -38,36 +53,33 @@ export default function App() {
       .channel(`party-${PARTY_ID}`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'slots', filter: `party_id=eq.${PARTY_ID}` },
-        (payload) => {
-          setSlots(curr => applyChange(curr, payload, 'day', 'position'))
-        })
+        (payload) => { setSlots(curr => applyChange(curr, payload, 'day', 'position')) })
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'gear', filter: `party_id=eq.${PARTY_ID}` },
-        (payload) => {
-          setGear(curr => applyChange(curr, payload, 'created_at'))
-        })
+        (payload) => { setGear(curr => applyChange(curr, payload, 'created_at')) })
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'gallery', filter: `party_id=eq.${PARTY_ID}` },
+        (payload) => { setGallery(curr => applyChange(curr, payload, 'created_at')) })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'missions', filter: `party_id=eq.${PARTY_ID}` },
+        (payload) => { setMissions(curr => applyChange(curr, payload, 'created_at')) })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'party_meta', filter: `party_id=eq.${PARTY_ID}` },
         (payload) => {
-          setGallery(curr => applyChange(curr, payload, 'created_at'))
+          if (payload.eventType === 'UPDATE') setPartyMeta(payload.new)
         })
-      .subscribe((status) => {
-        setConnected(status === 'SUBSCRIBED')
-      })
+      .subscribe((status) => { setConnected(status === 'SUBSCRIBED') })
 
     return () => { supabase.removeChannel(channel) }
   }, [loadAll])
 
-  const daySlots = slots
-    .filter(s => s.day === activeDay)
-    .sort((a, b) => {
-      const ta = parseTimeMinutes(a.time)
-      const tb = parseTimeMinutes(b.time)
-      if (ta !== null && tb !== null) return ta - tb
-      if (ta !== null) return -1
-      if (tb !== null) return 1
-      return a.position - b.position
-    })
+  const toggleMemoryMode = async () => {
+    const newVal = !partyMeta.memory_mode
+    setPartyMeta(p => ({ ...p, memory_mode: newVal }))
+    setSettingsOpen(false)
+    if (!newVal && currentView === 'memory') setCurrentView('planner')
+    await supabase.from('party_meta').update({ memory_mode: newVal }).eq('party_id', PARTY_ID)
+  }
 
   const updateSlot = async (id, patch) => {
     setSlots(curr => curr.map(s => s.id === id ? { ...s, ...patch } : s))
@@ -77,11 +89,12 @@ export default function App() {
     setSlots(curr => curr.filter(s => s.id !== id))
     await supabase.from('slots').delete().eq('id', id)
   }
-  const addSlot = async ({ time, title, subtitle }) => {
+  const addSlot = async ({ time, title, subtitle, day }) => {
+    const daySlots = slots.filter(s => s.day === day)
     const maxPos = Math.max(-1, ...daySlots.map(s => s.position))
     const row = {
       party_id: PARTY_ID,
-      day: activeDay,
+      day,
       position: maxPos + 1,
       time: time || '',
       title,
@@ -124,10 +137,25 @@ export default function App() {
             {connected ? 'live sync' : 'offline'}
           </div>
         </div>
-        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button className="gallery-btn" onClick={() => setShowGallery(true)}>
-            📷 Gallery
-          </button>
+        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
+          <div ref={settingsRef} style={{ position: 'relative' }}>
+            <button
+              className="iconbtn"
+              onClick={() => setSettingsOpen(o => !o)}
+              aria-label="Instellingen"
+              title="Instellingen"
+              style={{ fontSize: 16 }}
+            >
+              ⚙️
+            </button>
+            {settingsOpen && (
+              <div className="settings-menu">
+                <button onClick={toggleMemoryMode}>
+                  Memory Book {partyMeta.memory_mode ? 'UIT' : 'AAN'}
+                </button>
+              </div>
+            )}
+          </div>
           <div>
             <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>jij bent</div>
             <select className="me-select" value={me} onChange={e => setMe(e.target.value)}>
@@ -137,84 +165,61 @@ export default function App() {
         </div>
       </div>
 
-      <div className="day-tabs">
-        {DAYS.map((d, i) => (
+      <div className="top-tabs">
+        <button
+          className={`top-tab ${currentView === 'planner' ? 'active' : ''}`}
+          onClick={() => setCurrentView('planner')}
+        >
+          Planner
+        </button>
+        <button
+          className={`top-tab ${currentView === 'missions' ? 'active' : ''}`}
+          onClick={() => setCurrentView('missions')}
+        >
+          Missies
+        </button>
+        {partyMeta.memory_mode && (
           <button
-            key={i}
-            className={`day-tab ${activeDay === i ? 'active' : ''}`}
-            onClick={() => setActiveDay(i)}
+            className={`top-tab ${currentView === 'memory' ? 'active' : ''}`}
+            onClick={() => setCurrentView('memory')}
           >
-            <span className="day-num">{d.label}</span>
-            {d.sub}
+            Memory Book
           </button>
-        ))}
+        )}
       </div>
 
-      {daySlots.length === 0 && (
-        <div className="empty">Nog niks ingepland voor deze dag.</div>
-      )}
-
-      {daySlots.map(slot => (
-        <Slot
-          key={slot.id}
-          slot={slot}
+      {currentView === 'planner' && (
+        <Planner
           me={me}
-          onUpdate={(patch) => updateSlot(slot.id, patch)}
-          onDelete={() => deleteSlot(slot.id)}
-        />
-      ))}
-
-      <button className="add-slot" onClick={() => setShowAddSlot(true)}>
-        + Item toevoegen
-      </button>
-
-      <div className="section-header">
-        <h2>📦 Mee te nemen</h2>
-        <button className="iconbtn" onClick={addGear} aria-label="Voeg toe">+</button>
-      </div>
-
-      {gear.map(g => (
-        <GearItem
-          key={g.id}
-          item={g}
-          me={me}
-          crew={CREW}
-          onUpdate={(patch) => updateGear(g.id, patch)}
-          onDelete={() => deleteGear(g.id)}
-        />
-      ))}
-
-      <div className="foot">
-        Alles wordt live gedeeld met de crew · wijzigingen zijn meteen zichtbaar bij iedereen
-      </div>
-
-      {showAddSlot && (
-        <AddSlotModal
-          onClose={() => setShowAddSlot(false)}
-          onSave={(data) => { addSlot(data); setShowAddSlot(false) }}
-        />
-      )}
-
-      {showGallery && (
-        <Gallery
-          onClose={() => setShowGallery(false)}
-          me={me}
-          gallery={gallery}
           slots={slots}
+          gear={gear}
+          gallery={gallery}
+          onUpdateSlot={updateSlot}
+          onDeleteSlot={deleteSlot}
+          onAddSlot={addSlot}
+          onUpdateGear={updateGear}
+          onDeleteGear={deleteGear}
+          onAddGear={addGear}
+        />
+      )}
+
+      {currentView === 'missions' && (
+        <Missions
+          me={me}
+          missions={missions}
+          setMissions={setMissions}
+        />
+      )}
+
+      {currentView === 'memory' && partyMeta.memory_mode && (
+        <MemoryBook
+          slots={slots}
+          gallery={gallery}
+          missions={missions}
         />
       )}
     </div>
   )
-}
-
-function parseTimeMinutes(time) {
-  if (!time) return null
-  const m = String(time).trim().match(/^(\d{1,2}):(\d{2})$/)
-  if (!m) return null
-  const h = parseInt(m[1], 10)
-  const min = parseInt(m[2], 10)
-  if (h > 23 || min > 59) return null
-  return h * 60 + min
 }
 
 function applyChange(curr, payload, ...sortKeys) {
