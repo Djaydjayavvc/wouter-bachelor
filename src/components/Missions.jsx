@@ -52,9 +52,13 @@ export default function Missions({ me, missions, setMissions }) {
   }
 
   const addMission = async ({ text, points }) => {
-    const { data } = await supabase.from('missions').insert({
+    const { data, error } = await supabase.from('missions').insert({
       party_id: PARTY_ID, text, points, completed: false, claimed_by: '',
     }).select().single()
+    if (error) {
+      alert('Opslaan mislukt: ' + error.message)
+      return
+    }
     if (data) setMissions(curr => [...curr, data])
     setShowAddModal(false)
   }
@@ -207,6 +211,7 @@ function AddMissionModal({ onClose, onSave }) {
           {[10, 15, 20].map(p => (
             <button
               key={p}
+              type="button"
               className={`btn ${points === p ? 'primary' : ''}`}
               style={{ flex: 1 }}
               onClick={() => setPoints(p)}
