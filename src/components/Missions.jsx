@@ -53,7 +53,7 @@ export default function Missions({ me, missions, setMissions }) {
 
   const addMission = async ({ text, points }) => {
     const { data, error } = await supabase.from('missions').insert({
-      party_id: PARTY_ID, text, points, completed: false, claimed_by: '', assigned_to: '',
+      party_id: PARTY_ID, text, points, completed: false, claimed_by: '', assigned_to: '', created_by: me,
     }).select().single()
     if (error) {
       alert('Opslaan mislukt: ' + error.message)
@@ -136,7 +136,14 @@ function MissionCard({ mission, me, onClaim, onRelease, onComplete, onDelete }) 
   return (
     <div className="mission-card">
       <div className="mission-card-top">
-        <div className="mission-text">{mission.text}</div>
+        <div>
+          <div className="mission-text">{mission.text}</div>
+          {mission.created_by && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+              toegevoegd door {mission.created_by}
+            </div>
+          )}
+        </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexShrink: 0 }}>
           <span className={`mission-points-pill ${pointsClass}`}>{mission.points} pts</span>
           <button className="iconbtn" onClick={onDelete} style={{ width: 24, height: 24, fontSize: 12 }}>×</button>
