@@ -53,7 +53,7 @@ export default function Missions({ me, missions, setMissions }) {
 
   const addMission = async ({ text, points }) => {
     const { data, error } = await supabase.from('missions').insert({
-      party_id: PARTY_ID, text, points, completed: false, claimed_by: '',
+      party_id: PARTY_ID, text, points, completed: false, claimed_by: '', assigned_to: '',
     }).select().single()
     if (error) {
       alert('Opslaan mislukt: ' + error.message)
