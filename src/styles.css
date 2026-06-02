@@ -675,6 +675,9 @@ input, textarea, select {
 .add-mission-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 .mission-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -744,6 +747,98 @@ input, textarea, select {
   color: var(--text);
   line-height: 1.5;
 }
+
+/* Mission group headers — coloured per state */
+.mission-group-claimed { color: #f0a030; }
+.mission-group-open    { color: #5ba6f0; }
+.mission-group-completed { color: var(--success); }
+
+.mission-group-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.mission-group-count-claimed  { background: rgba(240,160,48,0.18); color: #f0a030; }
+.mission-group-count-open     { background: rgba(55,138,221,0.18); color: #5ba6f0; }
+.mission-group-count-completed { background: rgba(93,202,165,0.18); color: var(--success); }
+
+/* Mission cards — tinted per state */
+.mission-card-claimed {
+  border-color: rgba(240,160,48,0.28);
+  background: linear-gradient(135deg, var(--surface-2) 0%, rgba(240,160,48,0.06) 100%);
+}
+.mission-card-open {
+  border-color: rgba(55,138,221,0.22);
+  background: linear-gradient(135deg, var(--surface-2) 0%, rgba(55,138,221,0.05) 100%);
+}
+.mission-card-completed {
+  border-color: rgba(93,202,165,0.18);
+  background: linear-gradient(135deg, var(--surface-2) 0%, rgba(93,202,165,0.04) 100%);
+  opacity: 0.75;
+}
+
+/* Participants */
+.participants-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.participant-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(240,160,48,0.14);
+  color: #f0a030;
+  border: 1px solid rgba(240,160,48,0.28);
+}
+.participant-pill-me {
+  background: rgba(216,90,48,0.18);
+  color: var(--accent);
+  border-color: rgba(216,90,48,0.38);
+}
+
+/* Evidence photo upload button */
+.evidence-photo-btn {
+  width: 28px !important;
+  height: 28px !important;
+  font-size: 14px !important;
+  border: 1px solid rgba(240,160,48,0.35) !important;
+  color: #f0a030 !important;
+  background: rgba(240,160,48,0.1) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.evidence-photo-btn:hover { background: rgba(240,160,48,0.2) !important; }
+.evidence-photo-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* Evidence preview thumbnail on claimed cards */
+.mission-evidence-img {
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  margin-top: 8px;
+  cursor: pointer;
+  display: block;
+  border: 1px solid rgba(240,160,48,0.25);
+}
+
+/* Join button */
+.mission-join-btn {
+  width: 100%;
+  margin-top: 8px;
+  background: rgba(55,138,221,0.13) !important;
+  border: 1px solid rgba(55,138,221,0.3) !important;
+  color: #5ba6f0 !important;
+}
+.mission-join-btn:hover { background: rgba(55,138,221,0.22) !important; }
 
 .proof-tabs {
   display: flex;

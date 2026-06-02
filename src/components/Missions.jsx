@@ -6,6 +6,7 @@ export default function Missions({ me, missions, setMissions }) {
   const [showAddModal, setShowAddModal] = useState(false)
   const [proofMission, setProofMission] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [evidenceUploading, setEvidenceUploading] = useState(null)
 
   const scores = CREW.reduce((acc, name) => {
     acc[name] = missions
@@ -20,15 +21,31 @@ export default function Missions({ me, missions, setMissions }) {
   const completed = missions.filter(m => m.completed)
 
   const claimMission = async (mission) => {
-    const patch = { claimed_by: me, claimed_at: new Date().toISOString() }
+    const patch = { claimed_by: me, claimed_at: new Date().toISOString(), participants: [me] }
     setMissions(curr => curr.map(m => m.id === mission.id ? { ...m, ...patch } : m))
     await supabase.from('missions').update(patch).eq('id', mission.id)
   }
 
-  const releaseMission = async (mission) => {
-    const patch = { claimed_by: '', claimed_at: null }
-    setMissions(curr => curr.map(m => m.id === mission.id ? { ...m, ...patch } : m))
-    await supabase.from('missions').update(patch).eq('id', mission.id)
+  const joinMission = async (mission) => {
+    const current = mission.participants || []
+    if (current.includes(me)) return
+    const participants = [...current, me]
+    setMissions(curr => curr.map(m => m.id === mission.id ? { ...m, participants } : m))
+    await supabase.from('missions').update({ participants }).eq('id', mission.id)
+  }
+
+  const leaveMission = async (mission) => {
+    const participants = (mission.participants || []).filter(p => p !== me)
+    if (participants.length === 0) {
+      const patch = { claimed_by: '', claimed_at: null, participants: [] }
+      setMissions(curr => curr.map(m => m.id === mission.id ? { ...m, ...patch } : m))
+      await supabase.from('missions').update(patch).eq('id', mission.id)
+    } else {
+      const newClaimer = mission.claimed_by === me ? participants[0] : mission.claimed_by
+      const patch = { claimed_by: newClaimer, participants }
+      setMissions(curr => curr.map(m => m.id === mission.id ? { ...m, ...patch } : m))
+      await supabase.from('missions').update(patch).eq('id', mission.id)
+    }
   }
 
   const deleteMission = async (mission) => {
@@ -43,7 +60,7 @@ export default function Missions({ me, missions, setMissions }) {
       completed_by: me,
       completed_at: new Date().toISOString(),
       claimed_by: me,
-      proof_url: proof.type === 'photo' ? proof.url : '',
+      proof_url: proof.type === 'photo' ? proof.url : (mission.proof_url || ''),
       proof_path: proof.type === 'photo' ? proof.path : `note:${proof.text}`,
     }
     setMissions(curr => curr.map(m => m.id === mission.id ? { ...m, ...patch } : m))
@@ -51,22 +68,35 @@ export default function Missions({ me, missions, setMissions }) {
     setProofMission(null)
   }
 
+  const uploadEvidence = async (mission, file) => {
+    setEvidenceUploading(mission.id)
+    try {
+      const ext = file.name.split('.').pop() || 'jpg'
+      const path = `${PARTY_ID}/missions/${crypto.randomUUID()}.${ext}`
+      const { error } = await supabase.storage.from('party-photos').upload(path, file, { cacheControl: '3600', upsert: false })
+      if (error) { alert('Upload mislukt: ' + error.message); return }
+      const { data } = supabase.storage.from('party-photos').getPublicUrl(path)
+      const patch = { proof_url: data.publicUrl, proof_path: path }
+      setMissions(curr => curr.map(m => m.id === mission.id ? { ...m, ...patch } : m))
+      await supabase.from('missions').update(patch).eq('id', mission.id)
+    } finally {
+      setEvidenceUploading(null)
+    }
+  }
+
   const addMission = async ({ text, points }) => {
     const { data, error } = await supabase.from('missions').insert({
-      party_id: PARTY_ID, text, points, completed: false, claimed_by: '', assigned_to: me,
+      party_id: PARTY_ID, text, points, completed: false, claimed_by: '', assigned_to: me, participants: [],
     }).select().single()
-    if (error) {
-      alert('Opslaan mislukt: ' + error.message)
-      return
-    }
+    if (error) { alert('Opslaan mislukt: ' + error.message); return }
     if (data) setMissions(curr => [...curr, data])
     setShowAddModal(false)
   }
 
   const groups = [
-    { label: 'Open', items: open },
-    { label: 'Geclaimd', items: claimed },
-    { label: 'Voltooid', items: completed },
+    { label: 'Geclaimd', variant: 'claimed', icon: '🔥', items: claimed },
+    { label: 'Open', variant: 'open', icon: '📋', items: open },
+    { label: 'Voltooid', variant: 'completed', icon: '✅', items: completed },
   ]
 
   return (
@@ -89,18 +119,25 @@ export default function Missions({ me, missions, setMissions }) {
         + Nieuwe missie
       </button>
 
-      {groups.map(({ label, items }) => items.length > 0 && (
+      {groups.map(({ label, variant, icon, items }) => items.length > 0 && (
         <div key={label}>
-          <div className="mission-group-header">{label}</div>
+          <div className={`mission-group-header mission-group-${variant}`}>
+            <span>{icon} {label}</span>
+            <span className={`mission-group-count mission-group-count-${variant}`}>{items.length}</span>
+          </div>
           {items.map(m => (
             <MissionCard
               key={m.id}
               mission={m}
               me={me}
+              variant={variant}
+              evidenceUploading={evidenceUploading === m.id}
               onClaim={() => claimMission(m)}
-              onRelease={() => releaseMission(m)}
+              onJoin={() => joinMission(m)}
+              onLeave={() => leaveMission(m)}
               onComplete={() => setProofMission(m)}
               onDelete={() => deleteMission(m)}
+              onEvidenceUpload={(file) => uploadEvidence(m, file)}
             />
           ))}
         </div>
@@ -111,10 +148,7 @@ export default function Missions({ me, missions, setMissions }) {
       )}
 
       {showAddModal && (
-        <AddMissionModal
-          onClose={() => setShowAddModal(false)}
-          onSave={addMission}
-        />
+        <AddMissionModal onClose={() => setShowAddModal(false)} onSave={addMission} />
       )}
 
       {proofMission && (
@@ -130,13 +164,16 @@ export default function Missions({ me, missions, setMissions }) {
   )
 }
 
-function MissionCard({ mission, me, onClaim, onRelease, onComplete, onDelete }) {
+function MissionCard({ mission, me, variant, evidenceUploading, onClaim, onJoin, onLeave, onComplete, onDelete, onEvidenceUpload }) {
   const pointsClass = mission.points >= 20 ? 'red' : mission.points >= 15 ? 'orange' : 'blue'
+  const participants = mission.participants || []
+  const isParticipant = participants.includes(me)
+  const evidenceRef = useRef()
 
   return (
-    <div className="mission-card">
+    <div className={`mission-card mission-card-${variant}`}>
       <div className="mission-card-top">
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div className="mission-text">{mission.text}</div>
           {mission.assigned_to && (
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -146,6 +183,25 @@ function MissionCard({ mission, me, onClaim, onRelease, onComplete, onDelete }) 
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexShrink: 0 }}>
           <span className={`mission-points-pill ${pointsClass}`}>{mission.points} pts</span>
+          {variant === 'claimed' && (
+            <>
+              <input
+                ref={evidenceRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) onEvidenceUpload(f); e.target.value = '' }}
+              />
+              <button
+                className="iconbtn evidence-photo-btn"
+                onClick={() => evidenceRef.current.click()}
+                disabled={evidenceUploading}
+                title="Foto als bewijs toevoegen"
+              >
+                {evidenceUploading ? '⏳' : '📷'}
+              </button>
+            </>
+          )}
           <button className="iconbtn" onClick={onDelete} style={{ width: 24, height: 24, fontSize: 12 }}>×</button>
         </div>
       </div>
@@ -159,7 +215,7 @@ function MissionCard({ mission, me, onClaim, onRelease, onComplete, onDelete }) 
         ) : mission.claimed_by ? (
           <>
             <span className="status-dot orange" />
-            <span className="status-label">Geclaimd door {mission.claimed_by}</span>
+            <span className="status-label">Bezig: {mission.claimed_by}</span>
           </>
         ) : (
           <>
@@ -169,16 +225,39 @@ function MissionCard({ mission, me, onClaim, onRelease, onComplete, onDelete }) 
         )}
       </div>
 
+      {variant === 'claimed' && participants.length > 0 && (
+        <div className="participants-row">
+          {participants.map(p => (
+            <span key={p} className={`participant-pill ${p === me ? 'participant-pill-me' : ''}`}>{p}</span>
+          ))}
+        </div>
+      )}
+
+      {variant === 'claimed' && mission.proof_url && !mission.proof_path?.startsWith('note:') && (
+        <img
+          src={mission.proof_url}
+          alt="bewijs"
+          className="mission-evidence-img"
+          onClick={() => window.open(mission.proof_url, '_blank')}
+        />
+      )}
+
       {!mission.completed && !mission.claimed_by && (
         <button className="btn primary" style={{ marginTop: 8, width: '100%' }} onClick={onClaim}>
           Ik ga deze doen
         </button>
       )}
 
-      {!mission.completed && mission.claimed_by === me && (
+      {!mission.completed && mission.claimed_by && !isParticipant && (
+        <button className="btn mission-join-btn" onClick={onJoin}>
+          + Doe mee!
+        </button>
+      )}
+
+      {!mission.completed && isParticipant && (
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button className="btn primary" style={{ flex: 1 }} onClick={onComplete}>Voltooid</button>
-          <button className="btn danger" style={{ flex: 1 }} onClick={onRelease}>Toch niet</button>
+          <button className="btn primary" style={{ flex: 1 }} onClick={onComplete}>✓ Voltooid</button>
+          <button className="btn danger" onClick={onLeave}>Stap uit</button>
         </div>
       )}
 
@@ -272,12 +351,26 @@ function ProofModal({ mission, uploading, setUploading, onClose, onComplete }) {
         <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '0 0 12px', lineHeight: 1.4 }}>{mission.text}</p>
 
         <div className="proof-tabs">
-          <button className={`proof-tab ${tab === 'foto' ? 'active' : ''}`} onClick={() => setTab('foto')}>Foto</button>
-          <button className={`proof-tab ${tab === 'notitie' ? 'active' : ''}`} onClick={() => setTab('notitie')}>Notitie</button>
+          <button className={`proof-tab ${tab === 'foto' ? 'active' : ''}`} onClick={() => setTab('foto')}>📷 Foto</button>
+          <button className={`proof-tab ${tab === 'notitie' ? 'active' : ''}`} onClick={() => setTab('notitie')}>📝 Notitie</button>
         </div>
 
         {tab === 'foto' && (
           <div style={{ marginTop: 16 }}>
+            {mission.proof_url && !mission.proof_path?.startsWith('note:') && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Bestaand bewijs:</div>
+                <img src={mission.proof_url} alt="bewijs" style={{ width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 8 }} />
+                <button
+                  className="btn primary"
+                  style={{ width: '100%', marginTop: 8 }}
+                  onClick={() => onComplete({ type: 'photo', url: mission.proof_url, path: mission.proof_path })}
+                >
+                  Dit bewijs gebruiken
+                </button>
+                <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-dim)', margin: '8px 0' }}>— of nieuw uploaden —</div>
+              </div>
+            )}
             <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handlePhoto} />
             <input ref={libraryRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhoto} />
             <div style={{ display: 'flex', gap: 8 }}>
