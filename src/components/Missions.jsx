@@ -7,6 +7,7 @@ export default function Missions({ me, missions, setMissions }) {
   const [proofMission, setProofMission] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [evidenceUploading, setEvidenceUploading] = useState(null)
+  const [activeTab, setActiveTab] = useState('claimed')
 
   const scores = CREW.reduce((acc, name) => {
     acc[name] = missions
@@ -102,11 +103,12 @@ export default function Missions({ me, missions, setMissions }) {
     setShowAddModal(false)
   }
 
-  const groups = [
-    { label: 'Geclaimd', variant: 'claimed', icon: '🔥', items: claimed },
-    { label: 'Open', variant: 'open', icon: '📋', items: open },
-    { label: 'Voltooid', variant: 'completed', icon: '✅', items: completed },
+  const tabs = [
+    { key: 'claimed',   label: 'Geclaimd', icon: '🔥', items: claimed },
+    { key: 'open',      label: 'Open',      icon: '📋', items: open },
+    { key: 'completed', label: 'Voltooid',  icon: '✅', items: completed },
   ]
+  const activeGroup = tabs.find(t => t.key === activeTab)
 
   return (
     <div className="missions-container">
@@ -124,37 +126,49 @@ export default function Missions({ me, missions, setMissions }) {
         ))}
       </div>
 
+      <div className="mission-tabs">
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            className={`mission-tab mission-tab-${t.key} ${activeTab === t.key ? 'active' : ''}`}
+            onClick={() => setActiveTab(t.key)}
+          >
+            <span className="mission-tab-icon">{t.icon}</span>
+            <span className="mission-tab-label">{t.label}</span>
+            {t.items.length > 0 && (
+              <span className="mission-tab-badge">{t.items.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
       <button className="add-mission-btn" onClick={() => setShowAddModal(true)}>
         + Nieuwe missie
       </button>
 
-      {groups.map(({ label, variant, icon, items }) => items.length > 0 && (
-        <div key={label}>
-          <div className={`mission-group-header mission-group-${variant}`}>
-            <span>{icon} {label}</span>
-            <span className={`mission-group-count mission-group-count-${variant}`}>{items.length}</span>
-          </div>
-          {items.map(m => (
-            <MissionCard
-              key={m.id}
-              mission={m}
-              me={me}
-              variant={variant}
-              evidenceUploading={evidenceUploading === m.id}
-              onClaim={() => claimMission(m)}
-              onJoin={() => joinMission(m)}
-              onLeave={() => leaveMission(m)}
-              onComplete={() => setProofMission(m)}
-              onDelete={() => deleteMission(m)}
-              onEvidenceUpload={(file) => uploadEvidence(m, file)}
-              onRemoveEvidence={() => removeEvidence(m)}
-            />
-          ))}
+      {activeGroup && activeGroup.items.length > 0 ? (
+        activeGroup.items.map(m => (
+          <MissionCard
+            key={m.id}
+            mission={m}
+            me={me}
+            variant={activeGroup.key}
+            evidenceUploading={evidenceUploading === m.id}
+            onClaim={() => claimMission(m)}
+            onJoin={() => joinMission(m)}
+            onLeave={() => leaveMission(m)}
+            onComplete={() => setProofMission(m)}
+            onDelete={() => deleteMission(m)}
+            onEvidenceUpload={(file) => uploadEvidence(m, file)}
+            onRemoveEvidence={() => removeEvidence(m)}
+          />
+        ))
+      ) : (
+        <div className="empty">
+          {activeTab === 'claimed' && 'Nog niemand bezig met een missie.'}
+          {activeTab === 'open' && 'Geen open missies. Voeg er een toe!'}
+          {activeTab === 'completed' && 'Nog geen missies voltooid.'}
         </div>
-      ))}
-
-      {missions.length === 0 && (
-        <div className="empty">Nog geen missies. Voeg de eerste toe!</div>
       )}
 
       {showAddModal && (

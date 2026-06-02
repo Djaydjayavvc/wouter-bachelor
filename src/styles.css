@@ -748,6 +748,67 @@ input, textarea, select {
   line-height: 1.5;
 }
 
+/* Mission tabs */
+.mission-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.mission-tab {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 6px 8px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  position: relative;
+}
+.mission-tab-icon { font-size: 16px; line-height: 1; }
+.mission-tab-label { font-size: 11px; font-weight: 600; }
+.mission-tab-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--border-strong);
+  color: var(--text-muted);
+}
+.mission-tab-claimed.active {
+  background: rgba(240,160,48,0.12);
+  border-color: rgba(240,160,48,0.45);
+  color: #f0a030;
+}
+.mission-tab-claimed.active .mission-tab-badge { background: rgba(240,160,48,0.25); color: #f0a030; }
+.mission-tab-open.active {
+  background: rgba(55,138,221,0.12);
+  border-color: rgba(55,138,221,0.45);
+  color: #5ba6f0;
+}
+.mission-tab-open.active .mission-tab-badge { background: rgba(55,138,221,0.25); color: #5ba6f0; }
+.mission-tab-completed.active {
+  background: rgba(93,202,165,0.10);
+  border-color: rgba(93,202,165,0.4);
+  color: var(--success);
+}
+.mission-tab-completed.active .mission-tab-badge { background: rgba(93,202,165,0.22); color: var(--success); }
+
 /* Mission group headers — coloured per state */
 .mission-group-claimed { color: #f0a030; }
 .mission-group-open    { color: #5ba6f0; }
