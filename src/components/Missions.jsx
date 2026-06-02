@@ -68,6 +68,15 @@ export default function Missions({ me, missions, setMissions }) {
     setProofMission(null)
   }
 
+  const removeEvidence = async (mission) => {
+    if (mission.proof_path && !mission.proof_path.startsWith('note:')) {
+      await supabase.storage.from('party-photos').remove([mission.proof_path])
+    }
+    const patch = { proof_url: '', proof_path: '' }
+    setMissions(curr => curr.map(m => m.id === mission.id ? { ...m, ...patch } : m))
+    await supabase.from('missions').update(patch).eq('id', mission.id)
+  }
+
   const uploadEvidence = async (mission, file) => {
     setEvidenceUploading(mission.id)
     try {
@@ -138,6 +147,7 @@ export default function Missions({ me, missions, setMissions }) {
               onComplete={() => setProofMission(m)}
               onDelete={() => deleteMission(m)}
               onEvidenceUpload={(file) => uploadEvidence(m, file)}
+              onRemoveEvidence={() => removeEvidence(m)}
             />
           ))}
         </div>
@@ -164,7 +174,7 @@ export default function Missions({ me, missions, setMissions }) {
   )
 }
 
-function MissionCard({ mission, me, variant, evidenceUploading, onClaim, onJoin, onLeave, onComplete, onDelete, onEvidenceUpload }) {
+function MissionCard({ mission, me, variant, evidenceUploading, onClaim, onJoin, onLeave, onComplete, onDelete, onEvidenceUpload, onRemoveEvidence }) {
   const pointsClass = mission.points >= 20 ? 'red' : mission.points >= 15 ? 'orange' : 'blue'
   const participants = mission.participants || []
   const isParticipant = participants.includes(me)
@@ -234,12 +244,20 @@ function MissionCard({ mission, me, variant, evidenceUploading, onClaim, onJoin,
       )}
 
       {variant === 'claimed' && mission.proof_url && !mission.proof_path?.startsWith('note:') && (
-        <img
-          src={mission.proof_url}
-          alt="bewijs"
-          className="mission-evidence-img"
-          onClick={() => window.open(mission.proof_url, '_blank')}
-        />
+        <div style={{ position: 'relative', marginTop: 8 }}>
+          <img
+            src={mission.proof_url}
+            alt="bewijs"
+            className="mission-evidence-img"
+            style={{ marginTop: 0 }}
+            onClick={() => window.open(mission.proof_url, '_blank')}
+          />
+          <button
+            className="evidence-remove-btn"
+            onClick={onRemoveEvidence}
+            title="Foto verwijderen"
+          >×</button>
+        </div>
       )}
 
       {!mission.completed && !mission.claimed_by && (

@@ -830,6 +830,27 @@ input, textarea, select {
   border: 1px solid rgba(240,160,48,0.25);
 }
 
+.evidence-remove-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.65);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s;
+}
+.evidence-remove-btn:hover { background: rgba(226,75,74,0.8); }
+
 /* Join button */
 .mission-join-btn {
   width: 100%;
