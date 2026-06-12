@@ -85,6 +85,29 @@ export default function SecretRules({ me }) {
     setTimeout(() => setPulsingId(null), 600)
   }
 
+  const untriggerRule = async (rule) => {
+    if ((rule.trigger_count || 0) <= 0) return
+    const { data: latest } = await supabase
+      .from('rule_triggers')
+      .select('id')
+      .eq('rule_id', rule.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+    if (latest) {
+      await supabase.from('rule_triggers').delete().eq('id', latest.id)
+    }
+    const { data: current } = await supabase
+      .from('secret_rules')
+      .select('trigger_count')
+      .eq('id', rule.id)
+      .single()
+    await supabase
+      .from('secret_rules')
+      .update({ trigger_count: Math.max(0, (current?.trigger_count || 0) - 1) })
+      .eq('id', rule.id)
+  }
+
   const saveRule = async () => {
     if (!ruleText.trim()) return
     if (editRule) {
@@ -138,7 +161,7 @@ export default function SecretRules({ me }) {
       <div className="rules-warning-header">
         <div className="rules-warning-title">🤫 Geheime Regels</div>
         <div className="rules-warning-sub">
-          Wouter weet hier niks van. Tik op een regel als Wouter 'm overtreedt — dan moet hij drinken.
+          Wouter weet hier niks van. Druk op + als hij een regel overtreedt — dan moet hij drinken.
         </div>
       </div>
 
@@ -166,7 +189,6 @@ export default function SecretRules({ me }) {
               <div
                 key={rule.id}
                 className={`rule-card${flashingId === rule.id ? ' flashing' : ''}`}
-                onClick={() => triggerRule(rule)}
               >
                 <div className="rule-card-body">
                   <div className="rule-text">{rule.rule_text}</div>
@@ -174,9 +196,20 @@ export default function SecretRules({ me }) {
                     <div className="rule-recent">geknald: {timeAgo(recent.created_at)}</div>
                   )}
                 </div>
-                <div className="rule-card-right" onClick={e => e.stopPropagation()}>
-                  <div className={`rule-counter${pulsingId === rule.id ? ' pulse' : ''}`}>
-                    {rule.trigger_count || 0}x
+                <div className="rule-card-right">
+                  <div className="rule-count-row">
+                    <button
+                      className="rule-count-btn minus"
+                      onClick={() => untriggerRule(rule)}
+                      disabled={(rule.trigger_count || 0) === 0}
+                    >−</button>
+                    <div className={`rule-counter${pulsingId === rule.id ? ' pulse' : ''}`}>
+                      {rule.trigger_count || 0}x
+                    </div>
+                    <button
+                      className="rule-count-btn plus"
+                      onClick={() => triggerRule(rule)}
+                    >+</button>
                   </div>
                   <button
                     className="iconbtn rule-menu-btn"
