@@ -1,5 +1,6 @@
-import React from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { CREW, DAYS } from '../lib/seed'
+import { supabase, PARTY_ID } from '../lib/supabase'
 
 function parseTimeMinutes(time) {
   if (!time) return null
@@ -12,6 +13,19 @@ function parseTimeMinutes(time) {
 }
 
 export default function MemoryBook({ slots, gallery, missions }) {
+  const [secretRules, setSecretRules] = useState([])
+
+  const loadSecretRules = useCallback(async () => {
+    const { data } = await supabase
+      .from('secret_rules')
+      .select('*')
+      .eq('party_id', PARTY_ID)
+      .order('trigger_count', { ascending: false })
+    if (data) setSecretRules(data)
+  }, [])
+
+  useEffect(() => { loadSecretRules() }, [loadSecretRules])
+
   const completedMissions = missions.filter(m => m.completed)
   const missionPhotoCount = completedMissions.filter(m => m.proof_url && !m.proof_path?.startsWith('note:')).length
   const missionNoteCount = completedMissions.filter(m => m.proof_path?.startsWith('note:')).length
@@ -183,7 +197,36 @@ export default function MemoryBook({ slots, gallery, missions }) {
         </section>
       )}
 
-      {/* F) Photo wall */}
+      {/* F) Secret Rules reveal */}
+      {secretRules.length > 0 && (() => {
+        const withTriggers = secretRules.filter(r => r.trigger_count > 0)
+        const withoutTriggers = secretRules.filter(r => !r.trigger_count)
+        const sorted = [...withTriggers, ...withoutTriggers]
+        const grandTotal = secretRules.reduce((sum, r) => sum + (r.trigger_count || 0), 0)
+        return (
+          <section className="memory-section">
+            <h2 className="memory-h2">🤫 De regels die Wouter niet kende</h2>
+            <div className="memory-rules-list">
+              {sorted.map(rule => (
+                <div key={rule.id} className={`memory-rule-row${!rule.trigger_count ? ' zero' : ''}`}>
+                  <div className="memory-rule-text">
+                    "{rule.rule_text}"
+                    {!rule.trigger_count && (
+                      <span style={{ color: 'var(--text-dim)', fontStyle: 'italic', fontWeight: 400 }}> (zag niemand 'm doen)</span>
+                    )}
+                  </div>
+                  <div className="memory-rule-count">{rule.trigger_count || 0}x</div>
+                </div>
+              ))}
+            </div>
+            <div className="memory-rules-total">
+              Totaal: Wouter heeft {grandTotal}x moeten drinken
+            </div>
+          </section>
+        )
+      })()}
+
+      {/* H) Photo wall */}
       {allPhotos.length > 0 && (
         <section className="memory-section">
           <h2 className="memory-h2">📸 Foto Wall</h2>
@@ -198,7 +241,7 @@ export default function MemoryBook({ slots, gallery, missions }) {
         </section>
       )}
 
-      {/* G) Footer */}
+      {/* I) Footer */}
       <div className="memory-footer">
         Met dank aan Yahya, Jef, Roy en Max. 🐴
         <br />

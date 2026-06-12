@@ -4,6 +4,7 @@ import { CREW } from './lib/seed'
 import Planner from './components/Planner'
 import Missions from './components/Missions'
 import MemoryBook from './components/MemoryBook'
+import SecretRules from './components/SecretRules'
 
 export default function App() {
   const [me, setMe] = useState(() => localStorage.getItem('me') || 'Yahya')
@@ -178,6 +179,12 @@ export default function App() {
         >
           Missies
         </button>
+        <button
+          className={`top-tab ${currentView === 'regels' ? 'active' : ''}`}
+          onClick={() => setCurrentView('regels')}
+        >
+          Regels
+        </button>
         {partyMeta.memory_mode && (
           <button
             className={`top-tab ${currentView === 'memory' ? 'active' : ''}`}
@@ -209,6 +216,10 @@ export default function App() {
           missions={missions}
           setMissions={setMissions}
         />
+      )}
+
+      {currentView === 'regels' && (
+        <SecretRules me={me} />
       )}
 
       {currentView === 'memory' && partyMeta.memory_mode && (
