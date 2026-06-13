@@ -8,6 +8,9 @@ export default function Missions({ me, missions, setMissions }) {
   const [uploading, setUploading] = useState(false)
   const [evidenceUploading, setEvidenceUploading] = useState(null)
   const [activeTab, setActiveTab] = useState('claimed')
+  const [showDistributeConfirm, setShowDistributeConfirm] = useState(false)
+  const [distributeToast, setDistributeToast] = useState('')
+  const [randomMissionResult, setRandomMissionResult] = useState(null)
 
   const scores = CREW.reduce((acc, name) => {
     acc[name] = missions
@@ -94,6 +97,41 @@ export default function Missions({ me, missions, setMissions }) {
     }
   }
 
+  const distributeOpenMissions = async () => {
+    const openMissions = missions.filter(m => !m.completed && !m.claimed_by)
+    const shuffled = [...openMissions].sort(() => Math.random() - 0.5)
+    const now = new Date().toISOString()
+    const updates = shuffled.map((m, i) => ({
+      id: m.id,
+      claimed_by: CREW[i % CREW.length],
+      claimed_at: now,
+      participants: [CREW[i % CREW.length]],
+    }))
+    setMissions(curr => curr.map(m => {
+      const u = updates.find(u => u.id === m.id)
+      return u ? { ...m, ...u } : m
+    }))
+    await Promise.all(updates.map(u =>
+      supabase.from('missions').update({ claimed_by: u.claimed_by, claimed_at: u.claimed_at, participants: u.participants }).eq('id', u.id)
+    ))
+    setDistributeToast(`${shuffled.length} missies verdeeld!`)
+    setTimeout(() => setDistributeToast(''), 3000)
+    setShowDistributeConfirm(false)
+  }
+
+  const assignRandomMission = async () => {
+    const openMissions = missions.filter(m => !m.completed && !m.claimed_by)
+    if (openMissions.length === 0) {
+      setRandomMissionResult('none')
+      return
+    }
+    const mission = openMissions[Math.floor(Math.random() * openMissions.length)]
+    const patch = { claimed_by: me, claimed_at: new Date().toISOString(), participants: [me] }
+    setMissions(curr => curr.map(m => m.id === mission.id ? { ...m, ...patch } : m))
+    await supabase.from('missions').update(patch).eq('id', mission.id)
+    setRandomMissionResult({ ...mission, ...patch })
+  }
+
   const addMission = async ({ text, points }) => {
     const { data, error } = await supabase.from('missions').insert({
       party_id: PARTY_ID, text, points, completed: false, claimed_by: '', assigned_to: me, participants: [],
@@ -142,11 +180,51 @@ export default function Missions({ me, missions, setMissions }) {
         ))}
       </div>
 
+      <div className="autoassign-btns">
+        <button className="btn autoassign-btn" onClick={() => setShowDistributeConfirm(true)}>
+          🎲 Verdeel open missies
+        </button>
+        <button className="btn autoassign-btn" onClick={assignRandomMission}>
+          🎯 Geef mij een random missie
+        </button>
+      </div>
+
       <button className="add-mission-btn" onClick={() => setShowAddModal(true)}>
         + Nieuwe missie
       </button>
 
-      {activeGroup && activeGroup.items.length > 0 ? (
+      {activeTab === 'claimed' ? (
+        claimed.length > 0 ? (
+          CREW.filter(name => claimed.some(m => m.claimed_by === name)).map((name, idx) => {
+            const personMissions = claimed.filter(m => m.claimed_by === name)
+            return (
+              <React.Fragment key={name}>
+                <div className={`claimed-by-subheader${idx === 0 ? ' first' : ''}`}>
+                  {name} ({personMissions.length})
+                </div>
+                {personMissions.map(m => (
+                  <MissionCard
+                    key={m.id}
+                    mission={m}
+                    me={me}
+                    variant="claimed"
+                    evidenceUploading={evidenceUploading === m.id}
+                    onClaim={() => claimMission(m)}
+                    onJoin={() => joinMission(m)}
+                    onLeave={() => leaveMission(m)}
+                    onComplete={() => setProofMission(m)}
+                    onDelete={() => deleteMission(m)}
+                    onEvidenceUpload={(file) => uploadEvidence(m, file)}
+                    onRemoveEvidence={() => removeEvidence(m)}
+                  />
+                ))}
+              </React.Fragment>
+            )
+          })
+        ) : (
+          <div className="empty">Nog niemand bezig met een missie.</div>
+        )
+      ) : activeGroup && activeGroup.items.length > 0 ? (
         activeGroup.items.map(m => (
           <MissionCard
             key={m.id}
@@ -165,7 +243,6 @@ export default function Missions({ me, missions, setMissions }) {
         ))
       ) : (
         <div className="empty">
-          {activeTab === 'claimed' && 'Nog niemand bezig met een missie.'}
           {activeTab === 'open' && 'Geen open missies. Voeg er een toe!'}
           {activeTab === 'completed' && 'Nog geen missies voltooid.'}
         </div>
@@ -183,6 +260,50 @@ export default function Missions({ me, missions, setMissions }) {
           onClose={() => setProofMission(null)}
           onComplete={(proof) => completeMission(proofMission, proof)}
         />
+      )}
+
+      {showDistributeConfirm && (
+        <div className="modal-bg" onClick={() => setShowDistributeConfirm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3>Missies verdelen</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: '0 0 16px', lineHeight: 1.5 }}>
+              Dit verdeelt alle nog-niet-geclaimde missies willekeurig over de 4 crewleden (Yahya, Jef, Roy, Max). Doorgaan?
+            </p>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setShowDistributeConfirm(false)}>Annuleer</button>
+              <button className="btn primary" onClick={distributeOpenMissions}>Doorgaan</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {randomMissionResult && (
+        <div className="modal-bg" onClick={() => setRandomMissionResult(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            {randomMissionResult === 'none' ? (
+              <p style={{ textAlign: 'center', fontSize: 18, margin: '12px 0 16px' }}>Geen open missies meer 🤷</p>
+            ) : (
+              <>
+                <h3>Jouw missie:</h3>
+                <div className="mission-random-result">
+                  <div className="mission-text">{randomMissionResult.text}</div>
+                  <div style={{ marginTop: 10 }}>
+                    <span className={`mission-points-pill ${randomMissionResult.points >= 20 ? 'red' : randomMissionResult.points >= 15 ? 'orange' : 'blue'}`}>
+                      {randomMissionResult.points} pts
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+            <div className="modal-actions" style={{ justifyContent: 'center' }}>
+              <button className="btn primary" onClick={() => setRandomMissionResult(null)}>Sluiten</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {distributeToast && (
+        <div className="distribute-toast">{distributeToast}</div>
       )}
     </div>
   )
