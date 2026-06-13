@@ -11,6 +11,7 @@ export default function Missions({ me, missions, setMissions }) {
   const [showDistributeConfirm, setShowDistributeConfirm] = useState(false)
   const [distributeToast, setDistributeToast] = useState('')
   const [randomMissionResult, setRandomMissionResult] = useState(null)
+  const [editMission, setEditMission] = useState(null)
 
   const scores = CREW.reduce((acc, name) => {
     acc[name] = missions
@@ -132,6 +133,13 @@ export default function Missions({ me, missions, setMissions }) {
     setRandomMissionResult({ ...mission, ...patch })
   }
 
+  const updateMission = async ({ text, points }) => {
+    const patch = { text, points }
+    setMissions(curr => curr.map(m => m.id === editMission.id ? { ...m, ...patch } : m))
+    await supabase.from('missions').update(patch).eq('id', editMission.id)
+    setEditMission(null)
+  }
+
   const addMission = async ({ text, points }) => {
     const { data, error } = await supabase.from('missions').insert({
       party_id: PARTY_ID, text, points, completed: false, claimed_by: '', assigned_to: me, participants: [],
@@ -213,6 +221,7 @@ export default function Missions({ me, missions, setMissions }) {
                     onJoin={() => joinMission(m)}
                     onLeave={() => leaveMission(m)}
                     onComplete={() => setProofMission(m)}
+                    onEdit={() => setEditMission(m)}
                     onDelete={() => deleteMission(m)}
                     onEvidenceUpload={(file) => uploadEvidence(m, file)}
                     onRemoveEvidence={() => removeEvidence(m)}
@@ -250,6 +259,14 @@ export default function Missions({ me, missions, setMissions }) {
 
       {showAddModal && (
         <AddMissionModal onClose={() => setShowAddModal(false)} onSave={addMission} />
+      )}
+
+      {editMission && (
+        <AddMissionModal
+          mission={editMission}
+          onClose={() => setEditMission(null)}
+          onSave={updateMission}
+        />
       )}
 
       {proofMission && (
@@ -309,7 +326,7 @@ export default function Missions({ me, missions, setMissions }) {
   )
 }
 
-function MissionCard({ mission, me, variant, evidenceUploading, onClaim, onJoin, onLeave, onComplete, onDelete, onEvidenceUpload, onRemoveEvidence }) {
+function MissionCard({ mission, me, variant, evidenceUploading, onClaim, onJoin, onLeave, onComplete, onEdit, onDelete, onEvidenceUpload, onRemoveEvidence }) {
   const pointsClass = mission.points >= 20 ? 'red' : mission.points >= 15 ? 'orange' : 'blue'
   const participants = mission.participants || []
   const isParticipant = participants.includes(me)
@@ -347,6 +364,7 @@ function MissionCard({ mission, me, variant, evidenceUploading, onClaim, onJoin,
               </button>
             </>
           )}
+          <button className="iconbtn" onClick={onEdit} style={{ width: 24, height: 24, fontSize: 12 }} title="Bewerken">✏️</button>
           <button className="iconbtn" onClick={onDelete} style={{ width: 24, height: 24, fontSize: 12 }}>×</button>
         </div>
       </div>
@@ -430,14 +448,14 @@ function MissionCard({ mission, me, variant, evidenceUploading, onClaim, onJoin,
   )
 }
 
-function AddMissionModal({ onClose, onSave }) {
-  const [text, setText] = useState('')
-  const [points, setPoints] = useState(10)
+function AddMissionModal({ mission, onClose, onSave }) {
+  const [text, setText] = useState(mission?.text ?? '')
+  const [points, setPoints] = useState(mission?.points ?? 10)
 
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
-        <h3>Nieuwe missie</h3>
+        <h3>{mission ? 'Missie bewerken' : 'Nieuwe missie'}</h3>
         <label>Omschrijving</label>
         <textarea
           value={text}
